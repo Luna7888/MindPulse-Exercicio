@@ -1,0 +1,12 @@
+SENHA ADM
+
+admin@email.com
+123
+
+dudu@email.com
+123
+
+rob.gui@email.com  gestor
+123
+
+

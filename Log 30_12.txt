@@ -1,0 +1,4 @@
+00:48
+
+consegui esvaziar a cabeça e pensei melhor após copiar o banco de dados, consegui mudar o menu itens certinho, so preciso dar a permissão em cada um dos arquivos, ta indo bem
+

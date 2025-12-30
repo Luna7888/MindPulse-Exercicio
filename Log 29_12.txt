@@ -1,0 +1,32 @@
+Tinha um erro no layout Start , arrumei tirando aqueles caracteres estranhos de quadradinhos
+só retirei no Start pq la onde o programa todo é carregado então não era necessário retirar de outros lugares
+esse problema me custou uma horas, achei q eu iria abrir o arquivo e começar a fazer as coisas
+
+
+To começando a entender as coisas, o menu itens modifica os itens da sidebar de acordo com sua permissão, então eu devo fazer a mesma coisa com o gestor, o auth é a chave
+
+
+Acabei de perceber q no checklist php tem um erro de layout , tenho q descobrir mais tarde
+
+
+corrigi o banco para o meu XAMP, ta ate comentado o original, criei um novo banco chamado mindpulse, padrão XAMP
+
+tive que criar meu próprio banco de dados, pois não tinha como eu acessar um banco onde não tinha acesso
+
+e o modelo tava faltando algumas coisas.
+
+
+
+19:00
+
+consegui criar o banco de dados estou tendo so a chatice de mudar todos os nomes das tabelas, mas enfim é tranquilo, to escrevendo do lado como estava no db original
+
+
+19:15
+
+consegui conectar pelo menos o inicioo com meu db, não tem nenhum treinamento , mas so assim pra eu conseguir colocar um novo tipo de colaborador
+
+20:49
+
+parei por aqui , consgui um jeito mais fácil de copiar todos os dados! agora eu tento amanha colocar o gestor
+-LEMBRE-SE DO TIPO-
