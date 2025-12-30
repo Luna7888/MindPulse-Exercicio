@@ -150,13 +150,25 @@ $overdueCL  = (int)$totalsCL['overdue'];
  * Busca os nomes dos cargos do usuário
  * Exibidos no hero do dashboard
  */
-$roles = [];
-try {
-    $st = $pdo->prepare("SELECT r.name FROM roles r JOIN user_role ur ON ur.role_id=r.id WHERE ur.user_id=? ORDER BY r.name");
-    $st->execute([$userId]);
-    $roles = array_column($st->fetchAll(PDO::FETCH_ASSOC), 'name');
-} catch(Throwable $e) {
-    // Ignora erros (cargos são opcionais para exibição)
+// ═══════════════════════════════════════════════════════════════════════════
+// SEÇÃO: CARREGAMENTO DE CARGOS DO USUÁRIO
+// ═══════════════════════════════════════════════════════════════════════════
+
+$displayRoles = [];
+$userType = $user['type'] ?? 'Colaborador';
+
+// Se for Admin ou Gestor, define apenas o tipo para exibição
+if ($userType === 'Admin' || $userType === 'Gestor') {
+    $displayRoles = [$userType]; 
+} else {
+    try {
+        // Para colaboradores comuns, busca a lista de cargos técnicos no banco
+        $st = $pdo->prepare("SELECT r.name FROM roles r JOIN user_role ur ON ur.role_id=r.id WHERE ur.user_id=? ORDER BY r.name");
+        $st->execute([$userId]);
+        $displayRoles = array_column($st->fetchAll(PDO::FETCH_ASSOC), 'name');
+    } catch(Throwable $e) {
+        $displayRoles = ['Colaborador'];
+    }
 }
 ?>
 
@@ -341,7 +353,7 @@ try {
         
         <!-- Cargos do usuário -->
         <div class="roles">
-            <?= !empty($roles) ? htmlspecialchars(implode(' • ', $roles)) : '—' ?>
+            <?= !empty($displayRoles) ? htmlspecialchars(implode(' • ', $displayRoles)) : '—' ?>  <!-- so troquei roles por display roles-->
         </div>
         
         <!-- Recompensas conquistadas -->

@@ -40,7 +40,7 @@ require_once __DIR__ . '/../includes/auth.php';
  * Verifica permissão administrativa
  * Apenas Admin Geral e Gestores podem criar checklists
  */
-if (!canAccessAdmin()) { 
+if (!canAccessManager()) { 
     http_response_code(403); 
     echo '<div class="card" style="padding:20px">Acesso negado</div>'; 
     require_once __DIR__ . '/../includes/layout_end.php'; 
@@ -321,7 +321,6 @@ try {
                 <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
                     <path d="M12 2l4 7h-8l4-7zm0 20c-4.418 0-8-3.582-8-8h2a6 6 0 1012 0h2c0 4.418-3.582 8-8 8z"/>
                 </svg>
-                Dica: configure o **cargo padrão** para sabermos quem abre este checklist por padrão.
             </div>
         </div>
     </div>

@@ -37,10 +37,12 @@ require_once __DIR__ . '/../includes/layout_start.php';
 require_once __DIR__ . '/../includes/auth.php';
 require_once __DIR__ . '/../includes/db.php';
 
+$userCompanyId = $_SESSION['user']['company_id'] ?? 0;
+
 /**
  * Verifica permissão administrativa
  */
-if (!canAccessAdmin()) { 
+if (!canAccessManager()) { 
     http_response_code(403); 
     echo '<div class="card" style="padding:20px">Acesso negado</div>'; 
     require_once __DIR__ . '/../includes/layout_end.php'; 
@@ -54,7 +56,35 @@ if (!canAccessAdmin()) {
 /**
  * Lista de empresas para checkboxes
  */
-$companies = $pdo->query("SELECT id, name FROM companies ORDER BY name")->fetchAll();
+/**
+ * LÓGICA DE CARREGAMENTO DE EMPRESAS
+ */
+// ═══════════════════════════════════════════════════════════════════════════
+// NOVA LÓGICA: Busca empresa vinculada na tabela user_company
+// ═══════════════════════════════════════════════════════════════════════════
+
+if (isAdmin()) {
+    // Admin vê tudo
+    $companies = $pdo->query("SELECT id, name FROM companies ORDER BY name")->fetchAll();
+} else {
+    // 1. Pega ID do usuário logado
+    $currentUserId = $_SESSION['user']['id'] ?? 0;
+
+    // 2. Descobre qual empresa ele pertence na tabela user_company
+    $stmtLink = $pdo->prepare("SELECT company_id FROM user_company WHERE user_id = ? LIMIT 1");
+    $stmtLink->execute([$currentUserId]);
+    $link = $stmtLink->fetch();
+
+    if ($link) {
+        // 3. Busca os dados dessa empresa específica
+        $stmtComp = $pdo->prepare("SELECT id, name FROM companies WHERE id = ?");
+        $stmtComp->execute([$link['company_id']]);
+        $companies = $stmtComp->fetchAll();
+    } else {
+        // Se não achar vínculo, lista vazia
+        $companies = [];
+    }
+}
 
 /**
  * Lista de cargos para checkboxes
@@ -182,11 +212,13 @@ $roles = $pdo->query("SELECT id, name FROM roles ORDER BY name")->fetchAll();
                     </select>
                 </div>
                 <div>
-                    <label class="label">Tipo</label>
-                    <select class="input" name="type">
+                    <label class="label">Tipo</label>   <!-- filtrando possibildiade de criar outro gestor e admin-->
+                    <select class="input" name="type" id="typeSelect">
                         <option value="Colaborador">Colaborador</option>
-                        <option value="Admin">Admin</option>
-                        <option value = "Gestor">Gestor</option>
+                        <?php if (isAdmin()): ?>
+                            <option value="Admin">Admin</option>
+                            <option value="Gestor">Gestor</option>
+                        <?php endif; ?>
                     </select>
                 </div>
             </div>
@@ -202,7 +234,8 @@ $roles = $pdo->query("SELECT id, name FROM roles ORDER BY name")->fetchAll();
             <div class="card" style="padding:10px; max-height:180px; overflow:auto">
                 <?php foreach ($companies as $c): ?>
                     <label style="display:flex; align-items:center; gap:8px; margin:6px 0">
-                        <input type="checkbox" name="companies[]" value="<?= (int)$c['id'] ?>"> 
+                        <input type="checkbox" name="companies[]" value="<?= (int)$c['id'] ?>" 
+                            <?= (!isAdmin()) ? 'checked onclick="return false;"' : '' ?>> 
                         <?= htmlspecialchars($c['name']) ?>
                     </label>
                 <?php endforeach; ?>
@@ -280,6 +313,43 @@ document.querySelector('form').addEventListener('submit', () => {
     setLoading(btnSave, true); 
     setLoading(btnSave2, true); 
 });
+
+
+// Transforma o valor do PHP em uma constante que o navegador entende
+
+const GESTOR_COMPANY_ID = <?= (int)$userCompanyId ?>;
+
+document.addEventListener('DOMContentLoaded', function() {
+    const typeSelect = document.querySelector('select[name="type"]');
+    const roleChecks = document.querySelectorAll('input[name="roles[]"]');
+    const companyChecks = document.querySelectorAll('input[name="companies[]"]');
+
+    if (typeSelect) {
+        typeSelect.addEventListener('change', function() {
+            const selectedType = this.value;
+
+            if (selectedType === 'Admin' || selectedType === 'Gestor') {
+                // 1. MARCA TUDO: Para Admin ou Gestor
+                roleChecks.forEach(cb => cb.checked = true);
+
+                // Se for especificamente Gestor, marca a empresa dele
+                if (selectedType === 'Gestor' && GESTOR_COMPANY_ID > 0) {
+                    companyChecks.forEach(check => {
+                        check.checked = (parseInt(check.value) === GESTOR_COMPANY_ID);
+                    });
+                }
+            } else {
+                // 2. DESMARCA TUDO: Se for Colaborador
+                roleChecks.forEach(cb => cb.checked = false);
+                companyChecks.forEach(cb => cb.checked = false);
+            }
+        });
+    }
+});
+
+
 </script>
 
 <?php require_once __DIR__ . '/../includes/layout_end.php'; ?>
+
+

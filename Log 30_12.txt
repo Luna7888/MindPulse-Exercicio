@@ -2,3 +2,24 @@
 
 consegui esvaziar a cabeça e pensei melhor após copiar o banco de dados, consegui mudar o menu itens certinho, so preciso dar a permissão em cada um dos arquivos, ta indo bem
 
+12:42
+
+trocando algumas funções, criei 1 umfaço chamada canAcessManager, ela vai dar um gap para o Gestor agir
+
+não esquecer de modificar os saves tbm 
+
+gestor não pode criar ADMIN, não pode criara FORA DA SUA EMPRESA
+
+gestor deve ter todos os acessos
+
+
+14:40
+
+descobri que meu código de deixar so uma empresa pro gestor tava dando problema, vou mudar
+
+
+16:00
+
+consegui mudar , o gestor so mexe na empresa dele, não aciciona admin ou outro gestor, 
+
+talvez so dar a ultima olhada

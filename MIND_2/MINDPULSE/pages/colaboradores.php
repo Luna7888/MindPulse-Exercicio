@@ -34,7 +34,7 @@ require_once __DIR__ . '/../includes/db.php';
 /**
  * Verifica permissão administrativa
  */
-if (!canAccessAdmin()) { 
+if (!canAccessManager()) { 
     http_response_code(403); 
     echo '<div class="card" style="padding:20px">Acesso negado</div>'; 
     require_once __DIR__ . '/../includes/layout_end.php'; 

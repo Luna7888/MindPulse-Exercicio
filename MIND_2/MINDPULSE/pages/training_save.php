@@ -53,7 +53,7 @@ require_once __DIR__ . '/../includes/auth.php';
  * Exige autenticação e permissão administrativa
  */
 requireLogin();
-if (!canAccessAdmin()) { 
+if (!canAccessManager()) { 
     http_response_code(403); 
     exit('Acesso negado'); 
 }

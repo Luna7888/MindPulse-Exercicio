@@ -195,6 +195,11 @@ function canAccessAdmin(): bool {
     return isAdmin(); 
 }
 
+// funcao para verificar se é gestor, bom pra evitar mudanças de empresa 
+function isManager(): bool {
+    return isset($_SESSION['user']['type']) && $_SESSION['user']['type'] === 'Gestor';
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // SEÇÃO: FUNÇÕES DE CONTEXTO (EMPRESA ATUAL)
 // ═══════════════════════════════════════════════════════════════════════════

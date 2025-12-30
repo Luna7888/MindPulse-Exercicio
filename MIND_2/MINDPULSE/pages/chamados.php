@@ -35,7 +35,7 @@ require_once __DIR__ . '/../includes/feedback.php';
  * Verifica permissão administrativa
  * Apenas Admin Geral e Gestores podem ver chamados
  */
-if (!canAccessAdmin()) { 
+if (!canAccessManager()) { 
     http_response_code(403); 
     echo '<div class="card" style="padding:20px">Acesso negado</div>'; 
     require_once __DIR__ . '/../includes/layout_end.php'; 
