@@ -4,3 +4,4 @@ admin@mindhub.com
 admin123
 
 
+nome da database que esta no config.php é rhtrain, so permaneci o mesmo nome
