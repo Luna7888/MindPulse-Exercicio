@@ -4,7 +4,7 @@ consegui esvaziar a cabeça e pensei melhor após copiar o banco de dados, conse
 
 12:42
 
-trocando algumas funções, criei 1 umfaço chamada canAcessManager, ela vai dar um gap para o Gestor agir
+trocando algumas funções, criei 1 funcao chamada canAcessManager, ela vai dar um gap para o Gestor agir
 
 não esquecer de modificar os saves tbm 
 
@@ -23,3 +23,26 @@ descobri que meu código de deixar so uma empresa pro gestor tava dando problema
 consegui mudar , o gestor so mexe na empresa dele, não aciciona admin ou outro gestor, 
 
 talvez so dar a ultima olhada
+
+20:40
+
+descobri que da pra mudar o valor de cordenador pra adm pelo dev tools, arrumando
+
+22:00
+
+arrumei permissões do adm , estava dando conflito com o gestor, atualizava a pagina uma vez so e não deixava outro adm criado usar outras empresas
+
+22:09
+
+
+consertei o bug de empresas e adm, gestor não pode trocar o id e nem transformar os outros em adm
+
+
+agora vou fazer um teste falso pra ver se tem furos
+
+percebi que preciso deixar como padrão o gestor em TYPES nos usuários 
+
+
+22:38
+
+tirei o seletor do gestor conforme pedido

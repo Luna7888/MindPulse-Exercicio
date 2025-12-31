@@ -29,24 +29,35 @@
 // SEÇÃO: INICIALIZAÇÃO E DADOS DA SESSÃO
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Inicia sessão se necessário e inclui funções de autenticação
- */
 if (session_status() === PHP_SESSION_NONE) session_start();
+
+// Importante: Incluir db.php para poder fazer consultas
+require_once __DIR__ . '/db.php'; 
 require_once __DIR__ . '/auth.php';
 
-/**
- * Extrai dados da sessão para uso no template
- * 
- * $user: dados do usuário logado (id, name, email, type, avatar_url)
- * $companies: lista de empresas que o usuário pode acessar
- * $currentCompany: empresa atualmente selecionada
- * $avatar: URL da foto de perfil (ou avatar padrão)
- */
 $user            = $_SESSION['user'] ?? null;
-$companies       = $_SESSION['companies'] ?? [];
 $currentCompany  = $_SESSION['current_company'] ?? null;
-$avatar          = ($user['avatar_url'] ?? '') ?: url_for('/assets/img/avatar.svg');
+
+// ---------------------------------------------------------
+// 🔒 LÓGICA DE EMPRESAS NO HEADER
+// ---------------------------------------------------------
+if (isAdmin()) {
+    // ADMIN: Busca TUDO (*) para garantir que venha 'trade_name' e 'name'
+    // Ordena pelo nome (razão social)
+    $companies = $pdo->query("SELECT * FROM companies ORDER BY name ASC")->fetchAll();
+    
+    // Admin prefere ver a Razão Social (name)
+    $displayKey = 'name'; 
+} else {
+    // GESTOR: Usa a lista da sessão
+    $companies = $_SESSION['companies'] ?? [];
+    
+    // Gestor prefere ver o Nome Fantasia (trade_name)
+    $displayKey = 'trade_name';
+}
+// ---------------------------------------------------------
+
+$avatar = ($user['avatar_url'] ?? '') ?: url_for('/assets/img/avatar.svg');
 ?>
 
 <!-- ╔═══════════════════════════════════════════════════════════════════════╗
@@ -351,23 +362,34 @@ body.mh-lock{overflow:hidden; touch-action:none; overscroll-behavior:contain}
          ════════════════════════════════════════════════════════════════════ -->
     <div class="mh-right">
         <!-- Seletor de empresa (apenas se usuário tem acesso a empresas) -->
-        <?php if (!empty($companies)): ?>
-            <div class="mh-org">
-                <!-- Select com onchange que chama função JS para trocar empresa -->
-                <select id="mhSelectOrg" onchange="mhSwitchOrg(this)" aria-label="Selecionar organização">
-                    <?php foreach ($companies as $c): ?>
-                        <option
-                            title="<?= htmlspecialchars(($c['trade_name'] ?: $c['trade_name'])) ?>"
-                            value="<?= (int)$c['id'] ?>"
-                            <?= ($currentCompany && $c['id']==$currentCompany['id'])?'selected':'' ?>>
-                            <?= htmlspecialchars(($c['trade_name'] ?: $c['trade_name'])) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
-                <!-- Ícone de seta -->
-                <svg class="chev" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5H7z"/></svg>
-            </div>
-        <?php endif; ?>
+      <?php 
+        // Só mostra o seletor se for Admin OU se tiver mais de 1 empresa na lista
+        if (!empty($companies) && (isAdmin() || count($companies) > 1)): 
+        ?>
+          <div class="mh-org">
+              <select id="mhSelectOrg" onchange="mhSwitchOrg(this)" aria-label="Selecionar organização">
+                  <?php foreach ($companies as $c): ?>
+                      <?php 
+                          // Define qual nome mostrar (Razão Social p/ Admin, Fantasia p/ Gestor)
+                          $displayKey = isAdmin() ? 'name' : 'trade_name';
+                          $nameToShow = $c[$displayKey] ?? $c['trade_name'] ?? $c['name'] ?? ('Empresa #' . $c['id']);
+                          
+                          if (trim($nameToShow) === '') {
+                              $nameToShow = $c['name'] ?? $c['trade_name'] ?? ('Empresa #' . $c['id']);
+                          }
+                      ?>
+                      
+                      <option
+                          title="<?= htmlspecialchars($nameToShow) ?>"
+                          value="<?= (int)$c['id'] ?>"
+                          <?= ($currentCompany && $c['id'] == $currentCompany['id']) ? 'selected' : '' ?>>
+                          <?= htmlspecialchars($nameToShow) ?>
+                      </option>
+                  <?php endforeach; ?>
+              </select>
+              <svg class="chev" viewBox="0 0 24 24" fill="currentColor"><path d="M7 10l5 5 5-5H7z"/></svg>
+          </div>
+      <?php endif; ?>
 
         <!-- Avatar do usuário com menu dropdown -->
         <div class="mh-userwrap">

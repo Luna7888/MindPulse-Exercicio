@@ -319,6 +319,8 @@ document.querySelector('form').addEventListener('submit', () => {
 
 const GESTOR_COMPANY_ID = <?= (int)$userCompanyId ?>;
 
+
+//esse escopo serve para o admin e o gestor terem todos os direitos disponiveis
 document.addEventListener('DOMContentLoaded', function() {
     const typeSelect = document.querySelector('select[name="type"]');
     const roleChecks = document.querySelectorAll('input[name="roles[]"]');

@@ -61,7 +61,7 @@ requireLogin();
  * Verifica permissão administrativa
  * Apenas Admin Geral e Gestores podem atualizar chamados
  */
-if (!canAccessAdmin()) { 
+if (!canAccessManager()) { 
     http_response_code(403); 
     echo json_encode(['status' => 'error', 'message' => 'Acesso negado']); 
     exit; 

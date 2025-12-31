@@ -151,28 +151,34 @@ try {
     /**
      * Obtém o ID do usuário logado da sessão
      */
+    // ─────────────────────────────────────────────────────────────────────
+    // PASSO 2: Verificar se o usuário tem acesso à empresa
+    // ─────────────────────────────────────────────────────────────────────
+    
     $userId = (int)$_SESSION['user']['id'];
+    $row = null;
 
-    /**
-     * Query que verifica:
-     * 1. Se a empresa existe
-     * 2. Se o usuário está vinculado a ela (via user_company)
-     * 
-     * JOIN garante que só retorna se ambas condições forem verdadeiras
-     * LIMIT 1 otimiza (para no primeiro resultado)
-     */
-    $sql = "SELECT c.id, c.name, c.trade_name
-            FROM companies c
-            JOIN user_company uc ON uc.company_id = c.id
-            WHERE uc.user_id = ? AND c.id = ? 
-            LIMIT 1";
+    if (isAdmin()) {
+        // SE FOR ADMIN: Acesso VIP (busca direto na tabela companies)
+        // Não verifica a tabela user_company
+        $sql = "SELECT id, name, trade_name FROM companies WHERE id = ? LIMIT 1";
+        $st = $pdo->prepare($sql);
+        $st->execute([$cid]);
+        $row = $st->fetch(PDO::FETCH_ASSOC);
+    } else {
+        // SE FOR GESTOR: Acesso Restrito (precisa do vínculo)
+        $sql = "SELECT c.id, c.name, c.trade_name
+                FROM companies c
+                JOIN user_company uc ON uc.company_id = c.id
+                WHERE uc.user_id = ? AND c.id = ? 
+                LIMIT 1";
+        $st = $pdo->prepare($sql);
+        $st->execute([$userId, $cid]);
+        $row = $st->fetch(PDO::FETCH_ASSOC);
+    }
     
-    $st = $pdo->prepare($sql);
-    $st->execute([$userId, $cid]);
-    $row = $st->fetch(PDO::FETCH_ASSOC);
-    
     /**
-     * Se não encontrou, usuário não tem acesso a esta empresa
+     * Se não encontrou, usuário não tem acesso ou empresa não existe
      */
     if (!$row) {
         throw new Exception('Você não tem acesso a esta empresa.');
@@ -182,17 +188,25 @@ try {
     // PASSO 3: Atualizar a sessão com a nova empresa
     // ─────────────────────────────────────────────────────────────────────
     
-    /**
-     * Define a empresa atual na sessão
-     * 
-     * Armazena id e trade_name para uso em:
-     * - Queries filtradas por empresa
-     * - Exibição no header
-     */
+    // Atualiza a empresa atual
     $_SESSION['current_company'] = [
         'id' => (int)$row['id'], 
         'trade_name' => $row['trade_name']
     ];
+
+    // Atualiza a lista de empresas na sessão (opcional, mas bom pra manter sincronizado)
+    if (isAdmin()) {
+        $st2 = $pdo->query("SELECT id, name, trade_name FROM companies ORDER BY trade_name");
+        $_SESSION['companies'] = $st2->fetchAll(PDO::FETCH_ASSOC);
+    } else {
+        $st2 = $pdo->prepare("SELECT c.id, c.name, c.trade_name 
+                              FROM companies c
+                              JOIN user_company uc ON uc.company_id = c.id
+                              WHERE uc.user_id = ? 
+                              ORDER BY c.trade_name");
+        $st2->execute([$userId]);
+        $_SESSION['companies'] = $st2->fetchAll(PDO::FETCH_ASSOC);
+    }
 
     /**
      * Recarrega a lista completa de empresas do usuário

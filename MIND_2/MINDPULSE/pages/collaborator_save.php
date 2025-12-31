@@ -50,6 +50,7 @@ if (session_status() === PHP_SESSION_NONE) session_start();
 require_once __DIR__ . '/../includes/db.php';
 require_once __DIR__ . '/../includes/auth.php';
 
+$type = $_POST['type'] ?? 'Colaborador';
 /**
  * Exige autenticação e permissão administrativa
  */
@@ -100,15 +101,33 @@ $avatar    = trim($_POST['avatar_url'] ?? '');
 $birthday  = ($_POST['birthday'] ?? '') ?: null;
 $phone     = trim($_POST['phone'] ?? '');
 $status    = (int)($_POST['status'] ?? 1);
-$type      = $_POST['type'] ?? 'Colaborador';  // a linha antiga verificava se era ADMIN se nao era , era colaborador padrao, organizei para poder ser gestor
 $companies = $_POST['companies'] ?? [];
 $roles     = $_POST['roles'] ?? [];
 $notes     = trim($_POST['notes'] ?? '');
 
-/**
- * Validação básica: nome e email são obrigatórios
- */
-if ($name === '' || $email === '') { 
+// ---------------------------------------------------------
+// LÓGICA DO TIPO DE USUÁRIO (Blindagem de Segurança)
+// ---------------------------------------------------------
+// 2. AGORA A TRAVA: Se o usuário logado NÃO for Admin...
+if (!isAdmin()) {
+    // ... ignoramos o que veio do formulário e forçamos "Colaborador", Mais facil pensar assim do que fazer uma volta com o gestor
+    $type = 'Colaborador'; 
+}
+// ---------------------------------------------------------
+// SEGURANÇA: EMPRESAS (Blindagem Anti-DevTools)
+// ---------------------------------------------------------
+// Se o usuário NÃO for Admin (é Gestor)...
+if (!isAdmin()) {
+    // ... descobrimos qual é a empresa DELE...
+    $myCompanyId = currentCompanyId(); // Função do auth.php que pega o ID real
+    
+    // ... e forçamos o array de empresas ter APENAS a dele.
+    // Isso anula qualquer ID falso que ele tenha enviado pelo HTML.
+    $companies = $myCompanyId ? [$myCompanyId] : [];
+}
+
+
+if ($name === '' || $email === '') {    //parar tudo se email e nome estiverem vazios
     header('Location: ' . url_for('/pages/collaborator_new.php')); 
     exit; 
 }

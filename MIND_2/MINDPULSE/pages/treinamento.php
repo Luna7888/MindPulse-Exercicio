@@ -86,7 +86,20 @@ if ($trainingId <= 0) {
  * Busca o treinamento no banco
  * Valida que pertence à empresa atual e está ativo
  */
-$training = trainingById($pdo, $trainingId, $companyId);
+//CORREÇÃO 1: Lógica Híbrida de Busca, faz com que sempre verifique quem esta atualizando a pagina
+$training = null;
+
+if (isAdmin()) {
+    // ADMIN: Busca Global (Ignora empresa da sessão)
+    $stmt = $pdo->prepare("SELECT * FROM trainings WHERE id = ? LIMIT 1");
+    $stmt->execute([$trainingId]);
+    $training = $stmt->fetch(PDO::FETCH_ASSOC);
+} else {
+    //OUTROS: Busca Restrita à empresa atual
+    $training = trainingById($pdo, $trainingId, $companyId);
+}
+
+// Validação final se encontrou
 if (!$training) { 
     echo '<div class="card" style="padding:20px">Treinamento não encontrado.</div>'; 
     require_once __DIR__ . '/../includes/layout_end.php'; 
@@ -97,7 +110,9 @@ if (!$training) {
  * Verifica se o usuário tem acesso ao treinamento
  * Baseado nos cargos do usuário vs cargos vinculados ao treinamento
  */
-if (!userHasAccessToTraining($pdo, $userId, $trainingId)) {
+// Bypass de Permissão para Admin
+// Se NÃO for Admin E NÃO tiver acesso... então bloqueia.
+if (!isAdmin() && !userHasAccessToTraining($pdo, $userId, $trainingId)) {
     http_response_code(403);
     echo '<div class="card" style="padding:20px">Você não tem acesso a este treinamento.</div>';
     require_once __DIR__ . '/../includes/layout_end.php'; 
@@ -258,11 +273,11 @@ echo '<style>
             <!-- Barra de progresso geral -->
             <div style="margin-top:12px">
                 <div style="height:10px; background:rgba(255,255,255,.08); border-radius:999px; overflow:hidden">
-                    <div style="height:100%; width:<?= (int)$progress['percent'] ?>%; background:linear-gradient(135deg,var(--brand),var(--brand-2))"></div>
+                    <div style="height:100%; width:<?= (int)($progress['percent'] ?? 0) ?>%; background:linear-gradient(135deg,var(--brand),var(--brand-2))"></div>
                 </div>
                 <div style="display:flex; justify-content:space-between; margin-top:6px; color:#cbd5e1; font-size:.9rem">
                     <span>Progresso</span>
-                    <strong><?= (int)$progress['percent'] ?>% (<?= (int)$progress['done'] ?>/<?= (int)$progress['total'] ?>)</strong>
+                    <strong><?= (int)($progress['percent'] ?? 0) ?>% (<?= (int)($progress['done'] ?? 0) ?>/<?= (int)($progress['total'] ?? 0) ?>)</strong>
                 </div>
             </div>
         </div>

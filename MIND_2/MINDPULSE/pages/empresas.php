@@ -45,48 +45,51 @@ if (!canAccessManager()) {
 // SEÇÃO: CARREGAMENTO DE EMPRESAS
 // ═══════════════════════════════════════════════════════════════════════════
 
-$userId = (int)$_SESSION['user']['id'];
+// ═══════════════════════════════════════════════════════════════════════════
+// SEÇÃO: CARREGAMENTO DE EMPRESAS (CORRIGIDO)
+// ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Busca empresas do usuário
- * 
- * Tenta primeiro com todas as colunas (schema rico)
- * Se falhar, usa fallback minimalista (apenas id e name)
- */
+$userId = (int)$_SESSION['user']['id'];
 $companies = [];
 
 try {
-    /**
-     * Query rica: inclui colunas opcionais
-     */
-    $sql = "
-        SELECT c.id, c.name, c.trade_name, c.document, c.logo_url, c.is_active, c.created_at
-        FROM companies c
-        JOIN user_company uc ON uc.company_id = c.id
-        WHERE uc.user_id = ?
-        ORDER BY COALESCE(c.created_at, NOW()) DESC
-    ";
-    $st = $pdo->prepare($sql); 
-    $st->execute([$userId]);
-    $companies = $st->fetchAll(PDO::FETCH_ASSOC);
+    if (isAdmin()) {
+        // 👑 SE FOR ADMIN: Busca TODAS as empresas do sistema (sem JOIN)
+        $sql = "
+            SELECT c.id, c.name, c.trade_name, c.document, c.logo_url, c.is_active, c.created_at
+            FROM companies c
+            ORDER BY COALESCE(c.created_at, NOW()) DESC
+        ";
+        $st = $pdo->query($sql); // Executa direto
+        $companies = $st->fetchAll(PDO::FETCH_ASSOC);
+
+    } else {
+        // 👤 SE FOR GESTOR: Busca apenas as vinculadas (com JOIN)
+        $sql = "
+            SELECT c.id, c.name, c.trade_name, c.document, c.logo_url, c.is_active, c.created_at
+            FROM companies c
+            JOIN user_company uc ON uc.company_id = c.id
+            WHERE uc.user_id = ?
+            ORDER BY COALESCE(c.created_at, NOW()) DESC
+        ";
+        $st = $pdo->prepare($sql); 
+        $st->execute([$userId]);
+        $companies = $st->fetchAll(PDO::FETCH_ASSOC);
+    }
     
 } catch (Throwable $e) {
-    /**
-     * Fallback minimalista: apenas colunas básicas
-     */
-    $sql = "
-        SELECT c.id, c.name
-        FROM companies c
-        JOIN user_company uc ON uc.company_id = c.id
-        WHERE uc.user_id = ?
-        ORDER BY c.id DESC
-    ";
-    $st = $pdo->prepare($sql); 
-    $st->execute([$userId]);
+    // Fallback de segurança (caso falte alguma coluna no banco)
+    // Se der erro, tenta buscar o mínimo necessário
+    if (isAdmin()) {
+        $sql = "SELECT id, name FROM companies ORDER BY id DESC";
+        $st = $pdo->query($sql);
+    } else {
+        $sql = "SELECT c.id, c.name FROM companies c JOIN user_company uc ON uc.company_id = c.id WHERE uc.user_id = ?";
+        $st = $pdo->prepare($sql);
+        $st->execute([$userId]);
+    }
     
-    /**
-     * Normaliza resultado para formato esperado
-     */
+    // Normaliza o resultado para evitar erros no HTML
     $companies = array_map(function($r) {
         return [
             'id'         => $r['id'],

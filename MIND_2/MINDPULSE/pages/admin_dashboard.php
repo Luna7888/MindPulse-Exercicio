@@ -2,26 +2,6 @@
 /**
  * ╔═══════════════════════════════════════════════════════════════════════════╗
  * ║ ADMIN_DASHBOARD.PHP — Painel Administrativo com KPIs e Gráficos          ║
- * ╠═══════════════════════════════════════════════════════════════════════════╣
- * ║                                                                           ║
- * ║ @objetivo      Fornecer visão gerencial da plataforma para admins        ║
- * ║                com KPIs, gráficos de crescimento e rankings              ║
- * ║                                                                           ║
- * ║ @acesso        Admin Geral | Gestor (canAccessAdmin)                     ║
- * ║ @escopo        Global (dados de todas as empresas)                       ║
- * ║                                                                           ║
- * ║ @exibe         - KPIs: total de empresas, usuários, checklists, treinos  ║
- * ║                - Gráfico: crescimento mensal (barras + linha)            ║
- * ║                - Rankings: colaboradores com mais recompensas            ║
- * ║                - Rankings: empresas com mais treinamentos                ║
- * ║                - Top 5: empresas com mais checklists                     ║
- * ║                                                                           ║
- * ║ @gráfico       Canvas puro (sem bibliotecas externas)                    ║
- * ║                - Barras: novas empresas por mês                          ║
- * ║                - Linha: novos treinamentos por mês                       ║
- * ║                                                                           ║
- * ║ @dependências  layout_start.php, auth.php                                ║
- * ║                                                                           ║
  * ╚═══════════════════════════════════════════════════════════════════════════╝
  */
 
@@ -32,11 +12,7 @@
 require_once __DIR__ . '/../includes/layout_start.php';
 require_once __DIR__ . '/../includes/auth.php';
 
-/**
- * Verifica permissão de acesso administrativo
- * * canAccessAdmin() retorna true para Admin Geral e Gestor
- * Se não tiver permissão, exibe mensagem de erro e encerra
- */
+// Verifica permissão (Admin ou Gestor)
 if (!canAccessManager()) { 
     http_response_code(403); 
     echo '<div class="card" style="padding:20px">Acesso negado</div>'; 
@@ -48,17 +24,6 @@ if (!canAccessManager()) {
 // SEÇÃO: FUNÇÕES AUXILIARES DE CONSULTA
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * qval() — Executa query e retorna um valor único (COUNT, SUM, etc.)
- * * @param PDO $pdo Conexão com o banco
- * @param string $sql Query SQL (deve retornar uma única coluna)
- * @param array $p Parâmetros para prepared statement
- * @param mixed $def Valor padrão em caso de erro
- * @return int Valor retornado pela query ou default
- * * @tolerância
- * Captura exceções silenciosamente para não quebrar o dashboard
- * se alguma tabela não existir ou houver erro de schema
- */
 function qval(PDO $pdo, string $sql, array $p = [], $def = 0) {
     try { 
         $st = $pdo->prepare($sql); 
@@ -69,15 +34,6 @@ function qval(PDO $pdo, string $sql, array $p = [], $def = 0) {
     }
 }
 
-/**
- * qall() — Executa query e retorna todas as linhas
- * * @param PDO $pdo Conexão com o banco
- * @param string $sql Query SQL
- * @param array $p Parâmetros para prepared statement
- * @return array Array de resultados ou array vazio em caso de erro
- * * @tolerância
- * Retorna array vazio em caso de erro (não quebra a página)
- */
 function qall(PDO $pdo, string $sql, array $p = []) {
     try { 
         $st = $pdo->prepare($sql); 
@@ -89,28 +45,25 @@ function qall(PDO $pdo, string $sql, array $p = []) {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-// LÓGICA DE FILTRO (ADMIN vs GESTOR) - NOVO!
+// LÓGICA DE FILTRO (ADMIN vs GESTOR)
 // ═══════════════════════════════════════════════════════════════════════════
 
-$isGlobal = isAdmin(); // Verifica se é Admin Geral (vê tudo)
-$sqlWhere = "";        // Cláusula SQL para filtrar por empresa
-$sqlParams = [];       // Parâmetros para o PDO
+$isGlobal = isAdmin(); // true = Admin Geral, false = Gestor
+$sqlWhere = "";        // Filtro SQL
+$sqlParams = [];       // Parâmetros SQL
 
 if (!$isGlobal) {
-    // 1. Busca o ID da empresa do gestor atual
+    // Busca ID da empresa do gestor
     $uid = $_SESSION['user']['id'];
     $stmt = $pdo->prepare("SELECT company_id FROM user_company WHERE user_id = ? LIMIT 1");
     $stmt->execute([$uid]);
     $myCid = $stmt->fetchColumn();
 
-    // 2. Define o filtro para todas as queries abaixo
     if ($myCid) {
-        // Gestor com empresa: filtra tudo por company_id
         $sqlWhere  = " WHERE company_id = ? ";
         $sqlParams = [$myCid];
     } else {
-        // Gestor sem empresa vinculada: trava tudo (segurança)
-        $sqlWhere  = " WHERE 1=0 "; 
+        $sqlWhere  = " WHERE 1=0 "; // Trava de segurança
     }
 }
 
@@ -118,34 +71,24 @@ if (!$isGlobal) {
 // SEÇÃO: COLETA DE DADOS - TOTAIS (KPIs)
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Totais simples para os cards de KPI
- * Adaptação: Se for Gestor, conta apenas dados da sua empresa
- */
-
-if ($isGlobal) {   //usa o global como uma unica função para todo o codigo evitando perda de performace
-    // Admin vê totais da plataforma inteira
+if ($isGlobal) {
+    // Admin: conta tudo
     $totCompanies = qval($pdo, "SELECT COUNT(*) FROM companies");
     $totUsers     = qval($pdo, "SELECT COUNT(*) FROM users");
 } else {
-    // Gestor vê apenas sua realidade
-    $totCompanies = 1; // Ele gerencia apenas 1 empresa
-    // Conta usuários que estão vinculados à mesma empresa que ele
-    $totUsers = qval($pdo, "SELECT COUNT(*) FROM user_company $sqlWhere", $sqlParams);
+    // Gestor: conta só dele
+    $totCompanies = 1; 
+    $totUsers     = qval($pdo, "SELECT COUNT(*) FROM user_company $sqlWhere", $sqlParams);
 }
 
-// Checklists e Treinamentos aceitam o filtro direto (têm coluna company_id)
+// Checklists e Treinos (usam filtro padrão)
 $totChecklists = qval($pdo, "SELECT COUNT(*) FROM checklists $sqlWhere", $sqlParams);
 $totTrainings  = qval($pdo, "SELECT COUNT(*) FROM trainings $sqlWhere", $sqlParams);
 
 // ═══════════════════════════════════════════════════════════════════════════
-// SEÇÃO: COLETA DE DADOS - SÉRIES MENSAIS (GRÁFICO)
+// SEÇÃO: COLETA DE DADOS - GRÁFICO
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Gera array com os últimos 12 meses no formato 'YYYY-MM'
- * Usado como labels do eixo X do gráfico
- */
 $months = [];
 $start  = new DateTime('first day of -11 months');
 for ($i = 0; $i < 12; $i++) { 
@@ -153,73 +96,48 @@ for ($i = 0; $i < 12; $i++) {
     $months[] = $m->format('Y-m'); 
 }
 
-/**
- * monthlySeriesFiltered() — Agrupa registros por mês com suporte a filtros
- * * @param PDO $pdo Conexão
- * @param string $table Nome da tabela
- * @param string $where Cláusula WHERE já formatada (ex: "WHERE company_id = ?")
- * @param array $params Parâmetros do WHERE
- * @return array Mapa [YYYY-MM => quantidade]
- */
 function monthlySeriesFiltered(PDO $pdo, string $table, string $where, array $params) {
-    // Se tiver WHERE, precisamos adaptar para concatenar com a data
-    // O $where vem como "WHERE ...". Transformamos em "AND ..." se necessário
     $clause = "";
     if ($where) {
-        $clause = " AND " . substr($where, 6); // Remove 'WHERE ' e vira 'AND ...'
+        $clause = " AND " . substr($where, 6); // Transforma WHERE em AND
     }
 
-    // SQL que agrupa por mês (ym)
     $sql = "SELECT DATE_FORMAT(created_at, '%Y-%m') ym, COUNT(id) n 
             FROM $table 
             WHERE 1=1 $clause 
             GROUP BY ym";
             
     $rows = qall($pdo, $sql, $params);
-    
     $map = []; 
     foreach ($rows as $r) { 
-        if (!empty($r['ym'])) {
-            $map[$r['ym']] = (int)$r['n']; 
-        }
+        if (!empty($r['ym'])) $map[$r['ym']] = (int)$r['n']; 
     }
     return $map;
 }
 
-/**
- * Séries para o gráfico
- * - seriesCompanies: Novas empresas (Admin vê gráfico, Gestor vê vazio/zero)
- * - seriesTrainings: Novos treinamentos (Filtrado pela empresa)
- */
+// Admin vê gráfico de empresas, Gestor vê vazio
 $seriesCompanies = ($isGlobal) 
     ? monthlySeriesFiltered($pdo, 'companies', "", []) 
-    : []; // Gestor não precisa ver gráfico de "novas empresas" da plataforma
+    : []; 
 
 $seriesTrainings = monthlySeriesFiltered($pdo, 'trainings', $sqlWhere, $sqlParams);
 
 // ═══════════════════════════════════════════════════════════════════════════
-// SEÇÃO: COLETA DE DADOS - RANKINGS
+// SEÇÃO: RANKINGS
 // ═══════════════════════════════════════════════════════════════════════════
 
-/**
- * Configuração dos Rankings
- * Se for gestor, precisamos fazer JOINs extras para filtrar os usuários
- */
 $userJoin  = "";
 $userWhere = "";
 $rankingParams = [];
 
 if (!$isGlobal && isset($myCid)) {
-    // Gestor: Filtra usuários fazendo join com user_company
+    // Gestor: Join para filtrar usuários da empresa dele
     $userJoin  = " JOIN user_company uc ON uc.user_id = u.id ";
     $userWhere = " WHERE uc.company_id = ? ";
     $rankingParams = [$myCid];
 }
 
-/**
- * Ranking: Colaboradores com mais recompensas
- * Adaptação: Se for Gestor, traz apenas colaboradores da empresa dele
- */
+// 1. Ranking Usuários
 $rankUsers = qall($pdo, "
     SELECT u.id, u.name, u.avatar_url, COUNT(ur.id) rewards
     FROM users u
@@ -232,8 +150,8 @@ $rankUsers = qall($pdo, "
     LIMIT 10
 ", $rankingParams);
 
-// Fallback: se user_rewards vazio, tenta user_training_done
 if (empty($rankUsers)) {
+    // Fallback se não tiver recompensas
     $rankUsers = qall($pdo, "
         SELECT u.id, u.name, u.avatar_url, COUNT(utd.training_id) rewards
         FROM users u
@@ -246,11 +164,7 @@ if (empty($rankUsers)) {
     ", $rankingParams);
 }
 
-/**
- * Ranking: Empresas com mais treinamentos
- * Adaptação: Se for Gestor, filtra WHERE c.id = ? (aparece só a dele)
- */
-// Define filtro específico para tabela companies alias 'c'
+// 2. Ranking Empresas / Total Treinamentos
 $compWhere = $isGlobal ? "" : " WHERE c.id = ? ";
 
 $rankCompaniesTrain = qall($pdo, "
@@ -261,12 +175,9 @@ $rankCompaniesTrain = qall($pdo, "
     GROUP BY c.id
     ORDER BY trainings DESC, c.name ASC
     LIMIT 10
-", $sqlParams); // Usa $sqlParams (que tem o ID da empresa ou vazio)
+", $sqlParams);
 
-/**
- * Top 5: Empresas com mais checklists
- * Adaptação: Mesmo filtro acima
- */
+// 3. Top 5 Checklists
 $top5Checklist = qall($pdo, "
     SELECT c.id, c.name, COUNT(ch.id) qnt
     FROM companies c
@@ -277,159 +188,48 @@ $top5Checklist = qall($pdo, "
     LIMIT 5
 ", $sqlParams);
 
-// ═══════════════════════════════════════════════════════════════════════════
-// SEÇÃO: PREPARAÇÃO DE DADOS PARA JAVASCRIPT
-// ═══════════════════════════════════════════════════════════════════════════
-
-/**
- * Converte os dados PHP para arrays JavaScript
- * * labels: meses para o eixo X
- * barVals: valores das barras (empresas)
- * lineVals: valores da linha (treinamentos)
- */
+// Prepara JS
 $labels   = $months;
 $barVals  = array_map(fn($ym) => $seriesCompanies[$ym] ?? 0, $months);
 $lineVals = array_map(fn($ym) => $seriesTrainings[$ym] ?? 0, $months);
 ?>
 
 <style>
-/* ═══════════════════════════════════════════════════════════════════════════
-   LAYOUT PRINCIPAL: Grid de 2 colunas
-   ═══════════════════════════════════════════════════════════════════════════ */
-.dash-grid{
-    display: grid; 
-    grid-template-columns: 1.25fr .75fr; 
-    gap: 12px;
-}
+/* Grid Layout */
+.dash-grid{ display: grid; grid-template-columns: 1.25fr .75fr; gap: 12px; }
+@media(max-width:1100px){ .dash-grid{ grid-template-columns: 1fr } }
 
-@media(max-width:1100px){
-    .dash-grid{ grid-template-columns: 1fr }
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   KPIs: Cards de indicadores principais
-   ═══════════════════════════════════════════════════════════════════════════ */
-.kpis{
-    display: grid; 
-    grid-template-columns: repeat(4, minmax(180px, 1fr)); 
-    gap: 12px; 
-    margin-bottom: 12px;
-}
-
-@media(max-width:1100px){
-    .kpis{ grid-template-columns: repeat(2, 1fr) }
-}
-
-.kpi{
-    padding: 14px; 
-    border-radius: 16px; 
-    border: 1px solid var(--stroke); 
-    display: flex; 
-    gap: 10px; 
-    align-items: center;
-    background: linear-gradient(135deg, rgba(255,106,0,.12), rgba(255,106,0,.06));
-}
-
+/* KPIs */
+.kpis{ display: grid; grid-template-columns: repeat(4, minmax(180px, 1fr)); gap: 12px; margin-bottom: 12px; }
+@media(max-width:1100px){ .kpis{ grid-template-columns: repeat(2, 1fr) } }
+.kpi{ padding: 14px; border-radius: 16px; border: 1px solid var(--stroke); display: flex; gap: 10px; align-items: center; background: linear-gradient(135deg, rgba(255,106,0,.12), rgba(255,106,0,.06)); }
 .kpi .n{ font-size: 1.8rem; font-weight: 900 }
 .kpi .t{ color: #cbd5e1 }
 
-/* ═══════════════════════════════════════════════════════════════════════════
-   CARDS GENÉRICOS
-   ═══════════════════════════════════════════════════════════════════════════ */
-.cardx{
-    border: 1px solid var(--stroke); 
-    border-radius: 16px; 
-    background: rgba(255,255,255,.04); 
-    padding: 14px;
-}
-
+/* Cards & Elements */
+.cardx{ border: 1px solid var(--stroke); border-radius: 16px; background: rgba(255,255,255,.04); padding: 14px; }
 .title{ margin: 0 0 8px; font-weight: 900 }
 .small{ color: #9aa4b2 }
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   GRÁFICO CANVAS
-   ═══════════════════════════════════════════════════════════════════════════ */
-#chart{
-    width: 100%; 
-    height: 320px; 
-    display: block;
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   RANKINGS
-   ═══════════════════════════════════════════════════════════════════════════ */
-.rank{
-    display: flex; 
-    flex-direction: column; 
-    gap: 8px;
-}
-
-.r-item{
-    display: grid; 
-    grid-template-columns: 40px 1fr 72px; 
-    gap: 10px; 
-    align-items: center; 
-    border: 1px solid var(--stroke);
-    background: rgba(255,255,255,.03); 
-    border-radius: 12px; 
-    padding: 8px;
-}
-
-.r-item img{
-    width: 40px; 
-    height: 40px; 
-    border-radius: 12px; 
-    object-fit: cover; 
-    border: 1px solid var(--stroke);
-}
-
-.badge{
-    border: 1px solid var(--stroke); 
-    border-radius: 999px; 
-    padding: 4px 10px;
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   TABELA TOP 5 (barras de progresso)
-   ═══════════════════════════════════════════════════════════════════════════ */
-.table{
-    width: 100%; 
-    border-collapse: separate; 
-    border-spacing: 0 10px;
-}
-
-.tr{
-    display: grid; 
-    grid-template-columns: 1fr 140px; 
-    gap: 10px; 
-    align-items: center; 
-    border: 1px solid var(--stroke); 
-    border-radius: 12px;
-    background: linear-gradient(135deg, rgba(255,255,255,.03), rgba(255,255,255,.04)); 
-    padding: 10px;
-}
-
-.progress{
-    height: 8px; 
-    background: rgba(255,255,255,.08); 
-    border-radius: 999px; 
-    overflow: hidden;
-}
-
-.progress > span{
-    display: block; 
-    height: 100%; 
-    background: linear-gradient(135deg, #ff6a00, #ff9153);
-}
+#chart{ width: 100%; height: 320px; display: block; }
+.rank{ display: flex; flex-direction: column; gap: 8px; }
+.r-item{ display: grid; grid-template-columns: 40px 1fr 72px; gap: 10px; align-items: center; border: 1px solid var(--stroke); background: rgba(255,255,255,.03); border-radius: 12px; padding: 8px; }
+.r-item img{ width: 40px; height: 40px; border-radius: 12px; object-fit: cover; border: 1px solid var(--stroke); }
+.badge{ border: 1px solid var(--stroke); border-radius: 999px; padding: 4px 10px; }
+.table{ width: 100%; border-collapse: separate; border-spacing: 0 10px; }
+.tr{ display: grid; grid-template-columns: 1fr 140px; gap: 10px; align-items: center; border: 1px solid var(--stroke); border-radius: 12px; background: linear-gradient(135deg, rgba(255,255,255,.03), rgba(255,255,255,.04)); padding: 10px; }
+.progress{ height: 8px; background: rgba(255,255,255,.08); border-radius: 999px; overflow: hidden; }
+.progress > span{ display: block; height: 100%; background: linear-gradient(135deg, #ff6a00, #ff9153); }
 </style>
 
-<h2 style="margin:0 0 8px; font-weight:900">Painel do Administrador</h2>
+<h2 style="margin:0 0 8px; font-weight:900">
+    <?= $isGlobal ? 'Painel do Administrador' : 'Dashboard da Empresa' ?>
+</h2>
 
 <div class="kpis">
     <div class="kpi">
         <div class="n"><?= $totCompanies ?></div>
         <div>
-            <div><strong>Empresas</strong></div>
+            <div><strong><?= $isGlobal ? 'Empresas' : 'Minha Empresa' ?></strong></div>
             <div class="t">cadastradas</div>
         </div>
     </div>
@@ -462,10 +262,13 @@ $lineVals = array_map(fn($ym) => $seriesTrainings[$ym] ?? 0, $months);
 <div class="dash-grid">
     
     <div class="cardx">
-        <h3 class="title">Crescimento — Empresas × Treinamentos</h3>
+        <h3 class="title">
+            <?= $isGlobal ? 'Crescimento — Empresas × Treinamentos' : 'Evolução dos Treinamentos' ?>
+        </h3>
         <canvas id="chart" width="900" height="320"></canvas>
         <div class="small" style="margin-top:6px">
-            Barras: novas empresas / mês • Linha: novos treinamentos / mês
+            <?php if($isGlobal): ?>Barras: novas empresas / mês • <?php endif; ?>
+            Linha: novos treinamentos / mês
         </div>
     </div>
 
@@ -475,7 +278,7 @@ $lineVals = array_map(fn($ym) => $seriesTrainings[$ym] ?? 0, $months);
             
             <div>
                 <div class="small" style="margin-bottom:6px">
-                    <strong>Colaboradores com mais recompensas</strong>
+                    <strong><?= $isGlobal ? 'Colaboradores com mais recompensas' : 'Meus Destaques (Equipe)' ?></strong>
                 </div>
                 <div class="rank">
                     <?php if (empty($rankUsers)): ?>
@@ -495,7 +298,7 @@ $lineVals = array_map(fn($ym) => $seriesTrainings[$ym] ?? 0, $months);
 
             <div>
                 <div class="small" style="margin:10px 0 6px">
-                    <strong>Empresas com mais treinamentos</strong>
+                    <strong><?= $isGlobal ? 'Empresas com mais treinamentos' : 'Total de Treinamentos' ?></strong>
                 </div>
                 <div class="rank">
                     <?php if (empty($rankCompaniesTrain)): ?>
@@ -519,12 +322,13 @@ $lineVals = array_map(fn($ym) => $seriesTrainings[$ym] ?? 0, $months);
 </div>
 
 <div class="cardx" style="margin-top:12px">
-    <h3 class="title">Top 5 empresas com mais checklists</h3>
+    <h3 class="title">
+        <?= $isGlobal ? 'Top 5 empresas com mais checklists' : 'Volume de Checklists' ?>
+    </h3>
     
     <?php if (empty($top5Checklist)): ?>
         <div class="small">Sem dados suficientes.</div>
     <?php else:
-        // Calcula o máximo para proporção das barras
         $max = max(array_map(fn($r) => (int)$r['qnt'], $top5Checklist)) ?: 1;
         
         foreach ($top5Checklist as $row):
@@ -545,126 +349,91 @@ $lineVals = array_map(fn($ym) => $seriesTrainings[$ym] ?? 0, $months);
 </div>
 
 <script>
-// Dados injetados do PHP
-const labels   = <?= json_encode($labels) ?>;    // Meses (eixo X)
-const barVals  = <?= json_encode($barVals) ?>;   // Valores das barras
-const lineVals = <?= json_encode($lineVals) ?>;  // Valores da linha
+const labels   = <?= json_encode($labels) ?>;
+const barVals  = <?= json_encode($barVals) ?>;
+const lineVals = <?= json_encode($lineVals) ?>;
+const isGlobal = <?= json_encode($isGlobal) ?>; // Passa flag para o JS
 
-/**
- * IIFE: Renderiza o gráfico de barras + linha
- * * Usa Canvas API puro (sem Chart.js ou outras bibliotecas)
- * Isso reduz dependências e tamanho do bundle
- */
 (function(){
-    // Obtém o canvas e contexto 2D
     const cv = document.getElementById('chart');
     const ctx = cv.getContext('2d');
-    
-    // Dimensões do canvas
     const W = cv.width, H = cv.height;
-    
-    // Padding (margens internas)
     const padL = 48, padR = 24, padT = 14, padB = 36;
     const innerW = W - padL - padR;
     const innerH = H - padT - padB;
 
-    // Calcula o valor máximo do eixo Y
     const maxY = Math.max(1, ...barVals, ...lineVals);
     const stepY = Math.max(1, Math.ceil(maxY / 4));
 
-    // ─────────────────────────────────────────────────────────────────────
-    // DESENHA O FUNDO
-    // ─────────────────────────────────────────────────────────────────────
+    // Fundo
     ctx.fillStyle = 'rgba(255,255,255,0.03)'; 
     ctx.fillRect(padL, padT, innerW, innerH);
     ctx.strokeStyle = 'rgba(255,255,255,0.12)'; 
     ctx.lineWidth = 1;
 
-    // ─────────────────────────────────────────────────────────────────────
-    // DESENHA O GRID DO EIXO Y
-    // ─────────────────────────────────────────────────────────────────────
+    // Grid Y
     ctx.font = '12px Inter, system-ui, sans-serif'; 
     ctx.fillStyle = '#9aa4b2';
-    
     for (let y = 0; y <= maxY; y += stepY) {
         const yy = padT + innerH - (y / maxY) * innerH;
-        ctx.beginPath(); 
-        ctx.moveTo(padL, yy); 
-        ctx.lineTo(padL + innerW, yy); 
-        ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(padL + innerW, yy); ctx.stroke();
         ctx.fillText(String(y), 8, yy + 4);
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // DESENHA AS BARRAS (Empresas)
-    // ─────────────────────────────────────────────────────────────────────
     const n = labels.length;
-    const barW = innerW / n * 0.55;  // Largura da barra
-    const gap = innerW / n;           // Espaço entre barras
+    const barW = innerW / n * 0.55;
+    const gap = innerW / n;
 
-    for (let i = 0; i < n; i++) {
-        const x = padL + i * gap + (gap - barW) / 2;
-        const v = barVals[i] || 0;
-        const h = (v / maxY) * innerH;
-        const y = padT + innerH - h;
-        
-        // Preenche a barra
-        ctx.fillStyle = 'rgba(255,106,0,0.35)';
-        ctx.fillRect(x, y, barW, h);
-        
-        // Contorno da barra
-        ctx.strokeStyle = 'rgba(255,106,0,0.6)'; 
-        ctx.strokeRect(x, y, barW, h);
+    // Barras (Só desenha se for global/admin)
+    if (isGlobal) {
+        for (let i = 0; i < n; i++) {
+            const x = padL + i * gap + (gap - barW) / 2;
+            const v = barVals[i] || 0;
+            const h = (v / maxY) * innerH;
+            const y = padT + innerH - h;
+            ctx.fillStyle = 'rgba(255,106,0,0.35)'; ctx.fillRect(x, y, barW, h);
+            ctx.strokeStyle = 'rgba(255,106,0,0.6)'; ctx.strokeRect(x, y, barW, h);
+        }
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // DESENHA A LINHA (Treinamentos)
-    // ─────────────────────────────────────────────────────────────────────
+    // Linha
     ctx.beginPath();
     for (let i = 0; i < n; i++) {
         const x = padL + i * gap + gap / 2;
         const v = lineVals[i] || 0;
         const y = padT + innerH - (v / maxY) * innerH;
-        
-        if (i === 0) ctx.moveTo(x, y); 
-        else ctx.lineTo(x, y);
+        if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
     }
-    ctx.strokeStyle = '#ff9153'; 
-    ctx.lineWidth = 2; 
-    ctx.stroke();
+    ctx.strokeStyle = '#ff9153'; ctx.lineWidth = 2; ctx.stroke();
 
-    // ─────────────────────────────────────────────────────────────────────
-    // DESENHA OS PONTOS DA LINHA
-    // ─────────────────────────────────────────────────────────────────────
+    // Pontos
     for (let i = 0; i < n; i++) {
         const x = padL + i * gap + gap / 2;
         const v = lineVals[i] || 0;
         const y = padT + innerH - (v / maxY) * innerH;
-        
-        ctx.fillStyle = '#ff9153'; 
-        ctx.beginPath(); 
-        ctx.arc(x, y, 3, 0, Math.PI * 2); 
-        ctx.fill();
+        ctx.fillStyle = '#ff9153'; ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
     }
 
-    // ─────────────────────────────────────────────────────────────────────
-    // DESENHA OS RÓTULOS DO EIXO X (Meses)
-    // ─────────────────────────────────────────────────────────────────────
-    ctx.fillStyle = '#9aa4b2'; 
-    ctx.textAlign = 'center';
+    // Eixo X
+    ctx.fillStyle = '#9aa4b2'; ctx.textAlign = 'center';
     labels.forEach((lb, i) => {
         const x = padL + i * gap + gap / 2;
         ctx.fillText(lb, x, H - 12);
     });
 
-    // ─────────────────────────────────────────────────────────────────────
-    // DESENHA A LEGENDA
-    // ─────────────────────────────────────────────────────────────────────
+    // Legenda no Canvas
     ctx.textAlign = 'left'; 
-    ctx.fillStyle = '#e8edf7';
-    ctx.fillText('Barras: Empresas', padL, padT - 2);
+    
+    // Só mostra legenda de Barras se for Admin
+    if (isGlobal) {
+        ctx.fillStyle = '#e8edf7';
+        ctx.fillText('Barras: Empresas', padL, padT - 2);
+    }
+    
     ctx.fillStyle = '#ff9153'; 
-    ctx.fillText('— Treinamentos', padL + 140, padT - 2);
+    // Ajusta posição da legenda da linha dependendo se a outra existe
+    const xPos = isGlobal ? padL + 140 : padL;
+    ctx.fillText('— Treinamentos', xPos, padT - 2);
 })();
 </script>
 
