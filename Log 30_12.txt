@@ -46,3 +46,7 @@ percebi que preciso deixar como padrão o gestor em TYPES nos usuários
 22:38
 
 tirei o seletor do gestor conforme pedido
+
+23:09
+
+coloquei todos os requerimentos pedindo para ver isAdmin aumenta demais a segurança e resolve vários erros
